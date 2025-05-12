@@ -1,131 +1,225 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Kidney AR - Guaranteed Working</title>
-    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <title>CKD Stage Visualizer</title>
     <style>
-        body { margin: 0; overflow: hidden; }
-        #permission-box {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        #kidney-visual {
             background: white;
             padding: 20px;
             border-radius: 10px;
-            text-align: center;
-            z-index: 10000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        .controls {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(0,0,0,0.7);
+
+        .stage-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stage-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #eee;
+            transition: all 0.3s;
+        }
+
+        .stage-btn.active {
+            background-color: #cc0000;
             color: white;
-            padding: 15px;
+            transform: scale(1.1);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .medical-info {
+            background: white;
+            padding: 20px;
             border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        /* SVG styles */
+        svg {
+            width: 100%;
+            height: auto;
+            max-width: 100%;
+        }
+
+        .kidney-path {
+            transform-origin: center;
+            transition: all 0.5s ease;
+        }
+
+        .nephron {
+            stroke: #333;
+            stroke-width: 1.5;
+            fill: none;
+            transition: opacity 0.4s ease;
+        }
+
+        .scar {
+            stroke: #000;
+            stroke-width: 1.2;
+            stroke-dasharray: 4;
+            fill: none;
+            opacity: 0;
+            transition: opacity 0.4s ease;
         }
     </style>
 </head>
 <body>
-    <!-- Permission Request -->
-    <div id="permission-box">
-        <h2>Camera Access Required</h2>
-        <button onclick="startAR()">Allow Camera Access</button>
-        <p id="error-msg" style="color: red; margin-top: 10px;"></p>
-    </div>
+    <h2>Chronic Kidney Disease Progression</h2>
+    
+    <div class="container">
+        <div id="kidney-visual">
+            <div class="stage-controls">
+                <button class="stage-btn" data-stage="1">Stage 1</button>
+                <button class="stage-btn" data-stage="2">Stage 2</button>
+                <button class="stage-btn" data-stage="3">Stage 3</button>
+                <button class="stage-btn" data-stage="4">Stage 4</button>
+                <button class="stage-btn" data-stage="5">Stage 5</button>
+            </div>
+            
+            <svg viewBox="0 0 200 200" id="kidney-svg">
+                <!-- Kidney Shape -->
+                <path class="kidney-path" d="M60,100 Q70,60 100,50 Q130,60 140,100 Q130,140 100,150 Q70,140 60,100"
+                      fill="#ff6666" stroke="#cc0000" stroke-width="2" />
 
-    <!-- AR Scene -->
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" style="display: none;">
-        <!-- Marker-based (for maximum compatibility) -->
-        <a-marker preset="hiro">
-            <a-entity gltf-model="https://cdn.glitch.global/df837afa-0dcd-45f4-8e2c-791d7c2a6358/kidney.glb"
-                     scale="0.3 0.3 0.3"
-                     animation="property: rotation; to: 0 360 0; loop: true; dur: 10000">
-            </a-entity>
-        </a-marker>
-        
-        <!-- Markerless (for newer devices) -->
-        <a-entity camera></a-entity>
-        <a-entity cursor="rayOrigin: mouse"></a-entity>
-    </a-scene>
+                <!-- Nephrons -->
+                <path class="nephron" d="M75,90 Q80,85 85,90 Q90,95 85,100" />
+                <path class="nephron" d="M95,100 Q100,95 105,100 Q110,105 105,110" />
+                <path class="nephron" d="M115,110 Q120,105 125,110 Q130,115 125,120" />
 
-    <!-- Controls -->
-    <div class="controls" style="display: none;">
-        <input type="range" id="damage" min="0" max="100" value="0">
-        <p>Damage Level: <span id="damage-value">0</span>%</p>
+                <!-- Scars -->
+                <path class="scar" d="M70,110 Q75,115 80,110" />
+                <path class="scar" d="M100,120 Q105,125 110,120" />
+                <path class="scar" d="M125,105 Q130,110 135,105" />
+            </svg>
+        </div>
+
+        <div class="medical-info">
+            <h3 id="stage-title">Stage 1: Normal Function</h3>
+            <div class="stage-details">
+                <p><strong>GFR:</strong> <span id="gfr-value">≥90</span> mL/min</p>
+                <p><strong>Function:</strong> <span id="function-status">Normal kidney function</span></p>
+                <p><strong>Characteristics:</strong> <span id="stage-chars">No symptoms, normal urine output</span></p>
+            </div>
+        </div>
     </div>
 
     <script>
-        // 1. Handle Camera Permissions
-        async function startAR() {
-            try {
-                // Request camera access first
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                
-                // Hide permission box
-                document.getElementById('permission-box').style.display = 'none';
-                
-                // Show AR scene
-                const scene = document.querySelector('a-scene');
-                scene.style.display = 'block';
-                
-                // Show controls
-                document.querySelector('.controls').style.display = 'block';
-
-                // Start AR
-                scene.addEventListener('loaded', () => {
-                    // Add click handler for markerless AR
-                    scene.addEventListener('click', (evt) => {
-                        const entity = document.createElement('a-entity');
-                        entity.setAttribute('gltf-model', 'https://cdn.glitch.global/df837afa-0dcd-45f4-8e2c-791d7c2a6358/kidney.glb');
-                        entity.setAttribute('scale', '0.3 0.3 0.3');
-                        entity.object3D.position.copy(evt.detail.intersection.point);
-                        scene.appendChild(entity);
-                    });
-                });
-
-            } catch (error) {
-                document.getElementById('error-msg').textContent = 
-                    `Error: ${error.message}. Please enable camera access in browser settings.`;
+        const stageData = {
+            1: {
+                color: "#ff6666",
+                scale: 1,
+                gfr: "≥90",
+                function: "Normal kidney function",
+                characteristics: "No symptoms, normal urine output",
+                nephrons: 3,
+                scars: 0,
+                title: "Stage 1: Normal Function"
+            },
+            2: {
+                color: "#ff4444",
+                scale: 0.95,
+                gfr: "60-89",
+                function: "Mild loss of function",
+                characteristics: "Mild proteinuria, possible hypertension",
+                nephrons: 2,
+                scars: 1,
+                title: "Stage 2: Mild CKD"
+            },
+            3: {
+                color: "#ff2222",
+                scale: 0.90,
+                gfr: "30-59",
+                function: "Moderate loss of function",
+                characteristics: "Fatigue, swelling, anemia",
+                nephrons: 1,
+                scars: 2,
+                title: "Stage 3: Moderate CKD"
+            },
+            4: {
+                color: "#cc0000",
+                scale: 0.85,
+                gfr: "15-29",
+                function: "Severe loss of function",
+                characteristics: "Bone pain, fluid retention, nausea",
+                nephrons: 0,
+                scars: 3,
+                title: "Stage 4: Severe CKD"
+            },
+            5: {
+                color: "#990000",
+                scale: 0.8,
+                gfr: "<15",
+                function: "Kidney Failure",
+                characteristics: "Uremia, dialysis required",
+                nephrons: 0,
+                scars: 3,
+                title: "Stage 5: Kidney Failure"
             }
-        }
+        };
 
-        // 2. Damage Visualization
-        document.getElementById('damage').addEventListener('input', (e) => {
-            const damage = e.target.value / 100;
-            document.getElementById('damage-value').textContent = e.target.value;
-
-            // Update all kidney models
-            document.querySelectorAll('[gltf-model]').forEach(kidney => {
-                // Color change (red to brown)
-                kidney.setAttribute('material', 'color', `hsl(${30 - (damage * 30)}, 70%, 50%)`);
-                
-                // Size reduction
-                const scale = 0.3 - (damage * 0.15);
-                kidney.setAttribute('scale', `${scale} ${scale} ${scale}`);
-                
-                // Surface texture
-                kidney.setAttribute('roughness', damage);
+        document.querySelectorAll('.stage-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.stage-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                const stage = this.dataset.stage;
+                updateVisualization(stage);
             });
         });
 
-        // 3. Compatibility Check
-        window.addEventListener('load', () => {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                document.getElementById('error-msg').textContent = 
-                    'Webcam access not supported. Use Chrome/Firefox on Android or Safari on iOS.';
-            }
-        });
+        function updateVisualization(stage) {
+            const data = stageData[stage];
+            const kidney = document.querySelector('.kidney-path');
+            const nephrons = document.querySelectorAll('.nephron');
+            const scars = document.querySelectorAll('.scar');
+
+            // Kidney color and scale
+            kidney.style.fill = data.color;
+            kidney.setAttribute("transform", `scale(${data.scale}) translate(${(1 - data.scale) * 100}, ${(1 - data.scale) * 100})`);
+
+            // Nephron visibility
+            nephrons.forEach((n, i) => {
+                n.style.opacity = i < data.nephrons ? 1 : 0.2;
+            });
+
+            // Scar visibility
+            scars.forEach((s, i) => {
+                s.style.opacity = i < data.scars ? 0.8 : 0;
+            });
+
+            // Medical info
+            document.getElementById('stage-title').textContent = data.title;
+            document.getElementById('gfr-value').textContent = data.gfr;
+            document.getElementById('function-status').textContent = data.function;
+            document.getElementById('stage-chars').textContent = data.characteristics;
+        }
+
+        // Load default view
+        document.querySelector('.stage-btn[data-stage="1"]').click();
     </script>
 
-    <!-- Instructions -->
-    <div style="position: fixed; top: 20px; left: 20px; color: white; background: rgba(0,0,0,0.5); padding: 10px;">
-        <strong>How to use:</strong><br>
-        1. Click "Allow Camera Access"<br>
-        2. Point camera at flat surface<br>
-        3. Adjust slider to see damage
+    <div style="margin-top: 30px; color: #666; font-size: 0.9em;">
+        <strong>Note:</strong> This visualization follows KDIGO 2012 Clinical Practice Guidelines. Consult a nephrologist for medical advice.
     </div>
 </body>
 </html>
